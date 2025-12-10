@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Uploader - Monitoring Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: white;
+            padding: 20px 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h1 {
+            color: #667eea;
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #10b981;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-card h3 {
+            font-size: 14px;
+            color: #6b7280;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 5px;
+        }
+
+        .stat-change {
+            font-size: 12px;
+            color: #10b981;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .stat-change.negative {
+            color: #ef4444;
+        }
+
+        .chart-section {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .chart-card {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .chart-card h2 {
+            font-size: 18px;
+            color: #1f2937;
+            margin-bottom: 20px;
+        }
+
+        .logs-section {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .logs-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .filter-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .filter-btn {
+            padding: 8px 16px;
+            border: 1px solid #e5e7eb;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .filter-btn:hover {
+            background: #f3f4f6;
+        }
+
+        .filter-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .log-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .log-table th {
+            text-align: left;
+            padding: 12px;
+            background: #f9fafb;
+            font-size: 12px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .log-table td {
+            padding: 12px;
+            border-bottom: 1px solid #f3f4f6;
+            font-size: 14px;
+        }
+
+        .log-level {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .log-level.info { background: #dbeafe; color: #1e40af; }
+        .log-level.warn { background: #fef3c7; color: #92400e; }
+        .log-level.error { background: #fee2e2; color: #991b1b; }
+        .log-level.debug { background: #f3f4f6; color: #4b5563; }
+
+        .alert-section {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .alert-item {
+            padding: 15px;
+            border-left: 4px solid;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .alert-item.warning {
+            background: #fffbeb;
+            border-color: #f59e0b;
+        }
+
+        .alert-item.critical {
+            background: #fef2f2;
+            border-color: #ef4444;
+        }
+
+        .alert-time {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .metric-bar {
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .metric-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s;
+        }
+
+        @media (max-width: 768px) {
+            .chart-section {
+                grid-template-columns: 1fr;
+            }
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .refresh-btn {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .refresh-btn:hover {
+            background: #5568d3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <h1>📊 PDF Uploader - Monitoring Dashboard</h1>
+                <p style="color: #6b7280; font-size: 14px; margin-top: 5px;">Real-time system monitoring & analytics</p>
+            </div>
+            <div class="status-badge">
+                <span class="status-dot"></span>
+                <span><strong>System Online</strong></span>
+                <button class="refresh-btn" onclick="refreshData()">🔄 Refresh</button>
+            </div>
+        </header>
+
+        <!-- Alert Section -->
+        <div class="alert-section">
+            <h2 style="margin-bottom: 15px;">⚠️ Active Alerts</h2>
+            <div class="alert-item warning">
+                <div>
+                    <strong>High CPU Usage</strong>
+                    <p style="font-size: 13px; color: #6b7280; margin-top: 5px;">CPU usage at 78% for the last 5 minutes</p>
+                </div>
+                <span class="alert-time">2 min ago</span>
+            </div>
+            <div class="alert-item warning">
+                <div>
+                    <strong>Slow Compression Detected</strong>
+                    <p style="font-size: 13px; color: #6b7280; margin-top: 5px;">Average compression time: 12.3 seconds (threshold: 10s)</p>
+                </div>
+                <span class="alert-time">8 min ago</span>
+            </div>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Total Uploads Today</h3>
+                <div class="stat-value">1,247</div>
+                <div class="stat-change">↑ 12.5% from yesterday</div>
+                <div class="metric-bar">
+                    <div class="metric-fill" style="width: 82%;"></div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <h3>Success Rate</h3>
+                <div class="stat-value">94.3%</div>
+                <div class="stat-change negative">↓ 2.1% from last hour</div>
+                <div class="metric-bar">
+                    <div class="metric-fill" style="width: 94%;"></div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <h3>Avg Compression Ratio</h3>
+                <div class="stat-value">42%</div>
+                <div class="stat-change">↑ 3.2% improvement</div>
+                <div class="metric-bar">
+                    <div class="metric-fill" style="width: 42%;"></div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <h3>Active Processes</h3>
+                <div class="stat-value">7</div>
+                <div class="stat-change">3 compression, 4 uploads</div>
+                <div class="metric-bar">
+                    <div class="metric-fill" style="width: 35%;"></div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <h3>Storage Used</h3>
+                <div class="stat-value">2.8 GB</div>
+                <div class="stat-change">of 5 GB allocated</div>
+                <div class="metric-bar">
+                    <div class="metric-fill" style="width: 56%;"></div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <h3>Avg Processing Time</h3>
+                <div class="stat-value">8.2s</div>
+                <div class="stat-change">↓ 1.3s faster</div>
+                <div class="metric-bar">
+                    <div class="metric-fill" style="width: 68%;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="chart-section">
+            <div class="chart-card">
+                <h2>📈 Upload & Compression Trends (Last 24 Hours)</h2>
+                <canvas id="trendsChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h2>🎯 Success vs Failed</h2>
+                <canvas id="successChart"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-section">
+            <div class="chart-card">
+                <h2>⚡ System Resources</h2>
+                <canvas id="resourcesChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h2>📦 File Size Distribution</h2>
+                <canvas id="sizeChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Logs Section -->
+        <div class="logs-section">
+            <div class="logs-header">
+                <h2>📋 Recent Logs</h2>
+                <div class="filter-buttons">
+                    <button class="filter-btn active" onclick="filterLogs('all')">All</button>
+                    <button class="filter-btn" onclick="filterLogs('info')">Info</button>
+                    <button class="filter-btn" onclick="filterLogs('warn')">Warnings</button>
+                    <button class="filter-btn" onclick="filterLogs('error')">Errors</button>
+                </div>
+            </div>
+            <table class="log-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Level</th>
+                        <th>Event</th>
+                        <th>Details</th>
+                        <th>Request ID</th>
+                    </tr>
+                </thead>
+                <tbody id="logTableBody">
+                    <tr>
+                        <td>15:42:31</td>
+                        <td><span class="log-level info">INFO</span></td>
+                        <td>compression.completed</td>
+                        <td>file_xyz789.pdf: 45.2MB → 28.7MB (36.5% reduction)</td>
+                        <td>req_abc123</td>
+                    </tr>
+                    <tr>
+                        <td>15:42:18</td>
+                        <td><span class="log-level warn">WARN</span></td>
+                        <td>compression.slow</td>
+                        <td>Compression took 12.3s (threshold: 10s)</td>
+                        <td>req_abc122</td>
+                    </tr>
+                    <tr>
+                        <td>15:41:55</td>
+                        <td><span class="log-level info">INFO</span></td>
+                        <td>upload.completed</td>
+                        <td>3 files uploaded, total: 127.4MB from 192.168.1.45</td>
+                        <td>req_abc121</td>
+                    </tr>
+                    <tr>
+                        <td>15:41:42</td>
+                        <td><span class="log-level error">ERROR</span></td>
+                        <td>compression.failed</td>
+                        <td>Target size not achievable: file_def456.pdf (final: 34.2MB)</td>
+                        <td>req_abc120</td>
+                    </tr>
+                    <tr>
+                        <td>15:41:28</td>
+                        <td><span class="log-level info">INFO</span></td>
+                        <td>cleanup.completed</td>
+                        <td>Deleted 23 expired files, freed 487MB</td>
+                        <td>cleanup_job</td>
+                    </tr>
+                    <tr>
+                        <td>15:40:55</td>
+                        <td><span class="log-level warn">WARN</span></td>
+                        <td>rate_limit.triggered</td>
+                        <td>IP 192.168.1.78 exceeded upload limit (50/hour)</td>
+                        <td>security_001</td>
+                    </tr>
+                    <tr>
+                        <td>15:40:32</td>
+                        <td><span class="log-level info">INFO</span></td>
+                        <td>download.completed</td>
+                        <td>file_ghi789.pdf downloaded by 192.168.1.92</td>
+                        <td>req_abc119</td>
+                    </tr>
+                    <tr>
+                        <td>15:40:18</td>
+                        <td><span class="log-level debug">DEBUG</span></td>
+                        <td>health_check</td>
+                        <td>System health OK, disk: 44%, CPU: 65%, RAM: 72%</td>
+                        <td>health_001</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Trends Chart
+        const trendsCtx = document.getElementById('trendsChart').getContext('2d');
+        new Chart(trendsCtx, {
+            type: 'line',
+            data: {
+                labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'],
+                datasets: [{
+                    label: 'Uploads',
+                    data: [45, 89, 156, 234, 312, 287, 198],
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }, {
+                    label: 'Compressions',
+                    data: [42, 85, 152, 228, 305, 280, 192],
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { position: 'bottom' }
+                },
+                scales: {
+                    y: { beginAtZero: true }
+                }
+            }
+        });
+
+        // Success Chart
+        const successCtx = document.getElementById('successChart').getContext('2d');
+        new Chart(successCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Success', 'Failed', 'Timeout'],
+                datasets: [{
+                    data: [1176, 58, 13],
+                    backgroundColor: ['#10b981', '#ef4444', '#f59e0b'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { position: 'bottom' }
+                }
+            }
+        });
+
+        // Resources Chart
+        const resourcesCtx = document.getElementById('resourcesChart').getContext('2d');
+        new Chart(resourcesCtx, {
+            type: 'bar',
+            data: {
+                labels: ['CPU', 'Memory', 'Disk', 'Network'],
+                datasets: [{
+                    label: 'Usage %',
+                    data: [65, 72, 44, 38],
+                    backgroundColor: ['#667eea', '#764ba2', '#f59e0b', '#10b981'],
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: { 
+                        beginAtZero: true,
+                        max: 100
+                    }
+                }
+            }
+        });
+
+        // Size Chart
+        const sizeCtx = document.getElementById('sizeChart').getContext('2d');
+        new Chart(sizeCtx, {
+            type: 'pie',
+            data: {
+                labels: ['<10MB', '10-30MB', '30-50MB', '>50MB'],
+                datasets: [{
+                    data: [385, 542, 248, 72],
+                    backgroundColor: ['#10b981', '#667eea', '#f59e0b', '#ef4444'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { position: 'bottom' }
+                }
+            }
+        });
+
+        function filterLogs(level) {
+            // Remove active class from all buttons
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            // Add active class to clicked button
+            event.target.classList.add('active');
+            
+            // Filter logic would go here
+            console.log('Filtering logs by:', level);
+        }
+
+        function refreshData() {
+            console.log('Refreshing dashboard data...');
+            // Simulate refresh animation
+            const btn = event.target;
+            btn.textContent = '⟳ Refreshing...';
+            btn.disabled = true;
+            
+            setTimeout(() => {
+                btn.textContent = '🔄 Refresh';
+                btn.disabled = false;
+            }, 1000);
+        }
+
+        // Auto-refresh every 30 seconds
+        setInterval(() => {
+            console.log('Auto-refreshing data...');
+        }, 30000);
+    </script>
+</body>
+</html>
