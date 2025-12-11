@@ -2,13 +2,14 @@
 
 ## 1. Gambaran Umum Proyek
 
-**Tujuan:**  
-Membangun layanan web sederhana untuk mengunggah file PDF, mengompresnya agar ukuran akhir **tidak lebih dari 32 MB**, mempersingkat nama file (maksimal **32 karakter**), dan menyimpan file hanya secara **sementara selama maksimum 10 menit** sebelum otomatis dihapus.
+**Tujuan ringkas:**
+- Layanan web sederhana untuk unggah PDF ➜ kompres (hasil **≤ 32 MB**) ➜ rename (maks **32 karakter**) ➜ simpan sementara **≤ 10 menit** lalu hapus otomatis.
 
-**Lingkungan:**  
-- Server: Ubuntu (on-prem / VPS)  
-- Stack: Bebas (backend bisa Node.js / Python / PHP / Go, dsb.)  
+**Lingkungan:**
+- Server: Ubuntu (on-prem / VPS)
+- Stack: Bebas (backend bisa Node.js / Python / PHP / Go, dsb.)
 - UI/UX: Sederhana, minimalis, fokus pada kemudahan penggunaan
+- Penyimpanan: direktori temporer lokal (dihapus berkala)
 
 ---
 
@@ -101,106 +102,54 @@ Membangun layanan web sederhana untuk mengunggah file PDF, mengompresnya agar uk
 ### 4.1 Komponen Utama
 
 - **Frontend (Web UI)**
-  - HTML/CSS/JS sederhana (bisa pakai framework ringan: Alpine.js / Vue / React jika perlu).
-  - Fitur drag-and-drop, progress bar, daftar file dan status.
+  - HTML/CSS/JS sederhana (framework opsional: Alpine.js / Vue / React).
+  - Fitur drag-and-drop, progress bar, daftar file, status per file.
+  - Menampilkan ringkasan hasil kompresi + tombol unduh.
 
 - **Backend Service**
   - REST API untuk upload, status, dan download.
   - Modul kompresi PDF:
-    - Menggunakan tool CLI (misal: Ghostscript, qpdf) atau library (misal: `pdf-lib`, `pikepdf`, dsb.).
-    - Menyesuaikan parameter kompresi (downsampling, quality, dsb.).
+    - Tool CLI (Ghostscript / qpdf) atau library (`pikepdf`, `pdf-lib`).
+    - Parameter kompresi dapat di-tune berdasarkan target 32 MB.
   - Modul penamaan file (normalisasi + pemotongan + hash pendek).
-  - Modul cleanup file temporer.
+  - Modul cleanup file temporer (job scheduler internal atau cron).
 
 - **Storage**
-  - Direktori lokal (misal `/var/tmp/pdf-uploader/`).
-  - Opsional: gunakan subfolder per hari untuk memudahkan pembersihan manual.
+  - Direktori lokal (misal `/var/tmp/pdf-uploader/` dengan subfolder tanggal untuk memudahkan bersih-bersih).
 
 - **Scheduler / Cleanup**
-  - Cron job tiap menit:
-    - Menjalankan script untuk menghapus file yang lebih tua dari 10 menit.
-  - Atau scheduler internal di aplikasi yang berjalan periodik.
-
-### 4.2 Opsi Stack Teknis (Contoh)
-
-Hanya contoh, bisa diganti sesuai preferensi:
-
-- **Opsi A – Node.js**
-  - Backend: Node.js + Express
-  - Kompresi: panggil Ghostscript via child process.
-  - Frontend: HTML + Tailwind + sedikit vanilla JS.
-
-- **Opsi B – Python**
-  - Backend: FastAPI / Flask
-  - Kompresi: Ghostscript / qpdf dipanggil via subprocess.
-  - Frontend: template Jinja2 + JS minimal.
-
-- **Opsi C – PHP**
-  - Backend: Laravel / Lumen / Slim.
-  - Kompresi: eksekusi Ghostscript via `exec()` dengan sanitasi parameter ketat.
+  - Cron job tiap menit atau worker internal:
+    - Menghapus file yang lebih tua dari 10 menit.
+    - Membersihkan metadata cache yang kadaluarsa.
 
 ---
 
-## 5. Brainstorming Fitur
+## 5. Alur Utama
 
-### 5.1 Fitur Inti (MVP)
-
-- [ ] Upload file PDF (single & multi-file).
-- [ ] Kompresi otomatis hingga target ≤ 32 MB.
-- [ ] Pemendekan nama file hingga 32 karakter.
-- [ ] Tampilan ukuran sebelum/sesudah + persentase kompresi.
-- [ ] Download link dengan masa aktif 10 menit.
-- [ ] Auto-delete file setelah 10 menit.
-- [ ] UI sederhana: drag-and-drop, progress bar, status.
-
-### 5.2 Fitur Tambahan (Nice-to-Have)
-
-- [ ] Pilihan level kompresi (Low, Medium, High).
-- [ ] Pratinjau halaman pertama PDF (thumbnail).
-- [ ] Dark mode toggle.
-- [ ] Multi-bahasa (misal: ID/EN).
-- [ ] Riwayat upload selama sesi browser (tanpa login).
-- [ ] Notifikasi browser ketika kompresi selesai (jika proses lama).
-- [ ] Dukungan integrasi API dengan token sederhana.
-- [ ] Batas kuota per IP (misal maksimum 50 file/hari).
-
-### 5.3 Fitur Admin / Ops
-
-- [ ] Dashboard sederhana untuk:
-  - [ ] Melihat statistik penggunaan (jumlah file, ukuran rata-rata, dsb.).
-  - [ ] Melihat log error terbaru.
-- [ ] Health check endpoint (`/health`):
-  - [ ] Mengecek disk space, akses ke tool kompresi, dsb.
+1. Pengguna buka halaman ➜ drop/pilih file PDF.
+2. Frontend kirim `POST /upload` (multipart) ➜ terima respons job ID/token.
+3. Backend simpan sementara ➜ validasi ➜ kompresi ➜ simpan hasil ke direktori temp.
+4. Frontend polling (atau SSE/websocket opsional) `GET /status/{token}` untuk status upload/kompres.
+5. Setelah selesai, pengguna klik link unduh dari UI (atau salin link token) ➜ `GET /download/{token}`.
+6. Cron/scheduler hapus file + metadata yang berumur > 10 menit.
 
 ---
 
-## 6. Rencana Kerja (Project Management / DevOps Style)
+## 6. Rencana Implementasi & Manajemen Proyek
 
-### 6.1 Tahap Inisiasi
+### 6.1 Scope MVP
+- Satu halaman UI sederhana.
+- Upload tunggal/bermultiple dengan progress.
+- Kompresi Ghostscript preset tunggal, target 32 MB, error jika gagal.
+- Cleanup internal interval (fallback cron di produksi).
+- Download via token unik.
 
-- [ ] Konfirmasi kebutuhan bisnis:
-  - [ ] Batas maksimal ukuran upload sebelum kompres.
-  - [ ] Batas jumlah file per upload.
-  - [ ] Apakah perlu autentikasi pengguna atau publik bebas akses.
-- [ ] Definisikan **Definition of Done (DoD)** dan acceptance criteria.
-- [ ] Pilih stack utama (Node/Python/PHP/Go) dan tool kompresi (Ghostscript, qpdf, dll).
-
-### 6.2 Tahap Desain
-
-- [ ] Desain arsitektur logis:
-  - [ ] Diagram alur: Upload → Validasi → Kompresi → Simpan Temp → Download → Cleanup.
-- [ ] Definisikan spesifikasi API:
-  - [ ] `POST /upload`
-  - [ ] `GET /download/{token}`
-  - [ ] `GET /status/{token}` (opsional)
-  - [ ] `GET /health`
-- [ ] Desain skema direktori penyimpanan:
-  - [ ] Struktur folder, format nama file, format metadata (jika ada).
-- [ ] Desain UI/UX:
-  - [ ] Wireframe halaman utama.
-  - [ ] Pesan error dan success states.
-- [ ] Desain mekanisme cleanup:
-  - [ ] Cron job atau scheduler internal, plus script yang jelas.
+### 6.2 RACI Ringkas
+- Product/Stakeholder: definisi kebutuhan & prioritas.
+- Dev Backend: endpoint upload/kompres/download, cleanup, logging.
+- Dev Frontend: UI drag-and-drop, progress, status, unduh.
+- DevOps: provisioning Ubuntu, reverse proxy, TLS, job cleanup, logging & monitoring.
+- QA: test fungsional, keamanan dasar, UAT.
 
 ### 6.3 Tahap Implementasi Backend
 
@@ -223,6 +172,11 @@ Hanya contoh, bisa diganti sesuai preferensi:
 - [ ] Implementasi endpoint health check.
 - [ ] Logging & error handling terstruktur.
 
+**Opsional cepat (MVP minimal):**
+- [ ] Satu service monolit sederhana (misal Express/FastAPI) dengan middleware upload.
+- [ ] Ghostscript wrapper dengan preset kompresi tunggal.
+- [ ] Scheduler berbasis interval di dalam proses (fallback cron untuk produksi).
+
 ### 6.4 Tahap Implementasi Frontend
 
 - [ ] Buat halaman utama dengan:
@@ -235,6 +189,11 @@ Hanya contoh, bisa diganti sesuai preferensi:
   - [ ] Ukuran sebelum/sesudah.
   - [ ] Link unduh.
 - [ ] Tampilkan pesan error yang ramah pengguna.
+
+**UX quick wins:**
+- [ ] Progress bar per file + status teks (uploading/compressing/done/failed).
+- [ ] Tombol “Salin link unduh”.
+- [ ] Notifikasi snackbar untuk error dan sukses.
 
 ### 6.5 Tahap DevOps & Deployment
 
@@ -255,6 +214,12 @@ Hanya contoh, bisa diganti sesuai preferensi:
 - [ ] Konfigurasi logging:
   - [ ] Direktori log, rotasi log (logrotate).
 
+**Keamanan & kepatuhan baseline:**
+- [ ] Non-root runtime user untuk service.
+- [ ] Limitasi folder temp dengan `noexec,nodev,nosuid` bila memungkinkan.
+- [ ] Rate limit & header keamanan dasar (CSP, X-Content-Type-Options, dsb.).
+- [ ] Health check endpoint yang tidak bocorkan detail sensitif.
+
 ### 6.6 Tahap Testing & QA
 
 - [ ] Uji unit:
@@ -274,6 +239,14 @@ Hanya contoh, bisa diganti sesuai preferensi:
   - [ ] Coba upload file non-PDF.
   - [ ] Coba path traversal dalam nama file.
   - [ ] Coba flood upload (lihat efek rate limit).
+
+**UAT (User Acceptance Test) singkat:**
+- [ ] Pengguna awam bisa selesai unggah ➜ kompres ➜ unduh tanpa panduan.
+- [ ] UI tetap responsif pada jaringan lambat (simulasi throttling).
+
+**Observability/monitoring check:**
+- [ ] Log error terpusat + alert dasar (misal email/Slack) untuk kompresi gagal > X kali/5 menit.
+- [ ] Metric: total upload, rata-rata waktu kompres, p99 waktu unduh, jumlah file gagal, disk usage temp.
 
 ### 6.7 Tahap Go-Live & Operasi
 
@@ -304,6 +277,21 @@ Hanya contoh, bisa diganti sesuai preferensi:
 - [ ] Deployment & monitoring awal.
 - [ ] Dokumentasi + SOP operasional.
 
+**Backlog detail (bisa dibuat tiket terpisah):**
+- [ ] FE-01: Halaman unggah dengan drag-and-drop + tombol pilih file.
+- [ ] FE-02: Progress bar & status per file + notifikasi error.
+- [ ] FE-03: Tabel hasil kompres + link unduh + copy link.
+- [ ] BE-01: Endpoint upload (validasi PDF, size hard limit, simpan temp awal).
+- [ ] BE-02: Modul kompresi + konfigurasi preset (target ≤ 32 MB) + fallback gagal.
+- [ ] BE-03: Modul pemendekan nama file (normalize + truncate + hash pendek).
+- [ ] BE-04: Endpoint download dengan token + validasi usia file 10 menit.
+- [ ] BE-05: Job cleanup (cron/internal) + script shell aman.
+- [ ] OPS-01: Provisioning server Ubuntu + runtime + Ghostscript/qpdf.
+- [ ] OPS-02: Reverse proxy (Nginx/Caddy) + SSL.
+- [ ] OPS-03: Logging & rotasi + alert dasar.
+- [ ] QA-01: Test case fungsional & keamanan dasar.
+- [ ] DOC-01: README deployment + SOP operasional.
+
 ---
 
 ## 8. Definition of Done (DoD) – Versi Awal
@@ -319,4 +307,3 @@ Fitur dianggap **selesai** jika:
 7. [ ] Terdapat dokumentasi singkat:
    - [ ] Cara memakai (untuk user).
    - [ ] Cara menjalankan & merawat (untuk admin/ops).
-
